@@ -37,10 +37,27 @@ jobs:
              }
              
              // 지라 티켓 ID 추출 함수
-             function extractJiraTicket(text) {
-               const jiraRegex = /([A-Z]+-\d+)/g;
-               const matches = text.match(jiraRegex);
-               return matches ? matches[0] : null;
+            function extractJiraTicket(pr) {
+               // "Related issue" 섹션 찾기 시도
+               const relatedIssueRegex = /(?:related|linked|connected)\s+(?:issue|issues|ticket|tickets)[^\n]*\n([\s\S]*?)(?:\n\s*\n|\n*$)/i;
+               const relatedSection = pr.body.match(relatedIssueRegex);
+               
+               let searchText = relatedSection && relatedSection[1] ? relatedSection[1] : pr.body;
+               
+               // genesisnest.atlassian.net 도메인을 포함한 링크 찾기
+               const jiraLinkRegex = /https?:\/\/genesisnest\.atlassian\.net\/browse\/([A-Z]+-\d+)/g;
+               const allMatches = [...searchText.matchAll(jiraLinkRegex)];
+               
+               if (allMatches.length > 0) {
+                 // 첫 번째 매치의 티켓 ID 반환
+                 return allMatches[0][1];
+               }
+               
+               // 백업: 본문 전체에서 Jira 티켓 ID 패턴 찾기
+               const jiraTicketRegex = /([A-Z]+-\d+)/g;
+               const matches = pr.body.match(jiraTicketRegex);
+               
+               return matches[0];
              }
 
              const prs = await github.rest.pulls.list({
@@ -116,10 +133,10 @@ jobs:
                    .join(', ');
                  
                  // 지라 티켓 정보 추출
-                 const jiraTicket = extractJiraTicket(pr.title);
+                  const jiraTicket = extractJiraTicket(pr);
                  let jiraInfo = '';
                  if (jiraTicket) {
-                   jiraInfo = ` | 지라: ${jiraTicket}`;
+                   jiraInfo = ` | 지라: <https://genesisnest.atlassian.net/browse/${jiraTicket}|${jiraTicket}>`;
                  }
                  
                  // PR 생성일로부터 경과일 계산
@@ -129,7 +146,7 @@ jobs:
                  let urgencyEmoji = '';
                  
                 if (daysOld >= 3) {
-                   urgencyEmoji = '🍂'; // 3-4일 지난 PR
+                   urgencyEmoji = '🍂'; // 3일 이상 지난 PR
                  } else if (daysOld >= 1) {
                    urgencyEmoji = '🍃'; // 1-2일 지난 PR
                  } else {
@@ -144,7 +161,8 @@ jobs:
                  message += `${urgencyEmoji} <${pr.html_url}|#${pr.number}: ${pr.title}>${jiraInfo}\n`;
                  message += `   • 리뷰어: ${reviewers}\n`;
                  message += `   • 담당자: ${assignees}\n`;
-                 message += `   • 요청일: ${createdDate.toLocaleDateString()} (${daysOld}일 전)\n\n`;
+                 
+                 message += `   • 요청일: ${createdDate.toLocaleDateString('ko-KR')} (${daysOld === 0 ? '오늘' : `${daysOld}일 전`)}\n\n`;
                }
              }
              

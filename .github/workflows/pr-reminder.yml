@@ -60,18 +60,45 @@ jobs:
                  pull_number: pr.number
                });
                
-               // 최신 리뷰가 승인인지 확인
-               const isApproved = reviews.data.some(review => 
-                 review.state === 'APPROVED' && 
-                 !reviews.data.some(r => 
-                   r.submitted_at > review.submitted_at && 
-                   r.state !== 'APPROVED'
-                 )
-               );
                
-               // 승인된 PR은 건너뛰기
-               if (isApproved) continue;
-               
+
+            // 리뷰어별 최신 리뷰 상태 확인
+            const reviewerStatus = {};
+            reviews.data.forEach(review => {
+              // 각 리뷰어의 가장 최신 리뷰 상태만 저장
+              if (!reviewerStatus[review.user.login] || 
+                  new Date(reviewerStatus[review.user.login].submitted_at) < new Date(review.submitted_at)) {
+                reviewerStatus[review.user.login] = review;
+              }
+            });
+
+            // 현재 요청된 리뷰어 목록
+            const currentRequestedReviewers = pr.requested_reviewers.map(r => r.login);
+
+            // 승인 여부 확인 (모든 현재 요청된 리뷰어가 아직 승인하지 않았거나, 승인 후 새 커밋이 있는 경우)
+            let needsReview = false;
+
+            // 현재 요청된 각 리뷰어에 대해 확인
+            for (const reviewer of currentRequestedReviewers) {
+              // 리뷰어가 아직 리뷰하지 않았거나, 최신 리뷰가 승인이 아닌 경우
+              if (!reviewerStatus[reviewer] || reviewerStatus[reviewer].state !== 'APPROVED') {
+                needsReview = true;
+                break;
+              }
+              
+              // 승인했지만 그 이후에 새 커밋이 추가된 경우
+              const approvalDate = new Date(reviewerStatus[reviewer].submitted_at);
+              const lastCommitDate = new Date(pr.head.sha.committed_date || pr.updated_at);
+              
+              if (approvalDate < lastCommitDate) {
+                needsReview = true;
+                break;
+              }
+            }
+
+            // 리뷰가 필요한 PR만 포함
+            if (!needsReview) continue;
+
                if (pr.requested_reviewers && pr.requested_reviewers.length > 0) {
                  hasPRs = true;
                  
@@ -123,7 +150,7 @@ jobs:
              
 
              if (!hasPRs) {
-               message = "📋 *현재 리뷰 대기 중인 PR이 없습니다.*🙌 🎉";
+               message = "🙌*현재 리뷰 대기 중인 PR이 없습니다.* 🎉";
              }
 
              core.setOutput('message', message);

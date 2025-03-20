@@ -1,6 +1,6 @@
 import { Probot } from "probot";
 import { WebClient } from "@slack/web-api";
-// import schedule from "node-schedule";
+import schedule from "node-schedule";
 
 const slackClient = new WebClient(process.env.SLACK_BOT_TOKEN);
 const slackChannel = process.env.SLACK_CHANNEL_ID || "";
@@ -68,69 +68,69 @@ export default (app: Probot) => {
     });
 
     // 오래된 PR 확인을 위한 스케줄러 설정 (매일 오전 9시)
-    // schedule.scheduleJob("0 9 * * *", async () => {
-    //   app.log.info("오래된 PR 확인 작업 실행 중...");
+    schedule.scheduleJob("0 9 * * *", async () => {
+      app.log.info("오래된 PR 확인 작업 실행 중...");
 
-    //   // 앱이 설치된 모든 저장소 가져오기
-    //   const installations = await app.octokit.apps.listInstallations();
+      // 앱이 설치된 모든 저장소 가져오기
+      const installations = await app.octokit.apps.listInstallations();
 
-    //   for (const installation of installations.data) {
-    //     const octokit = await app.auth(installation.id);
+      for (const installation of installations.data) {
+        const octokit = await app.auth(installation.id);
 
-    //     // 설치된 저장소 가져오기
-    //     const repos = await octokit.apps.listReposAccessibleToInstallation();
+        // 설치된 저장소 가져오기
+        const repos = await octokit.apps.listReposAccessibleToInstallation();
 
-    //     for (const repo of repos.data.repositories) {
-    //       // 열린 PR 가져오기
-    //       const prs = await octokit.pulls.list({
-    //         owner: repo.owner.login,
-    //         repo: repo.name,
-    //         state: "open",
-    //       });
+        for (const repo of repos.data.repositories) {
+          // 열린 PR 가져오기
+          const prs = await octokit.pulls.list({
+            owner: repo.owner.login,
+            repo: repo.name,
+            state: "open",
+          });
 
-    //       const now = new Date();
-    //       const stalePRs = prs.data.filter((pr) => {
-    //         const updatedAt = new Date(pr.updated_at);
-    //         const daysSinceUpdate = Math.floor(
-    //           (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60 * 24)
-    //         );
-    //         return daysSinceUpdate >= 3; // 3일 이상 업데이트되지 않은 PR
-    //       });
+          const now = new Date();
+          const stalePRs = prs.data.filter((pr) => {
+            const updatedAt = new Date(pr.updated_at);
+            const daysSinceUpdate = Math.floor(
+              (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60 * 24)
+            );
+            return daysSinceUpdate >= 3; // 3일 이상 업데이트되지 않은 PR
+          });
 
-    //       if (stalePRs.length > 0) {
-    //         let blocks: any[] = [
-    //           {
-    //             type: "section",
-    //             text: {
-    //               type: "mrkdwn",
-    //               text: `*오래된 PR 알림* ⏰\n*저장소:* ${repo.full_name}`,
-    //             },
-    //           },
-    //         ];
+          if (stalePRs.length > 0) {
+            let blocks: any[] = [
+              {
+                type: "section",
+                text: {
+                  type: "mrkdwn",
+                  text: `*오래된 PR 알림* ⏰\n*저장소:* ${repo.full_name}`,
+                },
+              },
+            ];
 
-    //         stalePRs.forEach((pr) => {
-    //           const updatedAt = new Date(pr.updated_at);
-    //           const daysSinceUpdate = Math.floor(
-    //             (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60 * 24)
-    //           );
+            stalePRs.forEach((pr) => {
+              const updatedAt = new Date(pr.updated_at);
+              const daysSinceUpdate = Math.floor(
+                (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60 * 24)
+              );
 
-    //           blocks.push({
-    //             type: "section",
-    //             text: {
-    //               type: "mrkdwn",
-    //               text: `*<${pr.html_url}|${pr.title}>*\n작성자: ${pr.user.login}\n마지막 업데이트: ${daysSinceUpdate}일 전`,
-    //             },
-    //           });
-    //         });
+              blocks.push({
+                type: "section",
+                text: {
+                  type: "mrkdwn",
+                  text: `*<${pr.html_url}|${pr.title}>*\n작성자: ${pr.user.login}\n마지막 업데이트: ${daysSinceUpdate}일 전`,
+                },
+              });
+            });
 
-    //         await sendSlackNotification({
-    //           blocks,
-    //           text: `오래된 PR 알림: ${repo.full_name}에 ${stalePRs.length}개의 오래된 PR이 있습니다.`,
-    //         });
-    //       }
-    //     }
-    //   }
-    // });
+            await sendSlackNotification({
+              blocks,
+              text: `오래된 PR 알림: ${repo.full_name}에 ${stalePRs.length}개의 오래된 PR이 있습니다.`,
+            });
+          }
+        }
+      }
+    });
   });
   // Slack 알림 전송 함수
   async function sendSlackNotification(message: any) {

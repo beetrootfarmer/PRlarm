@@ -1,0 +1,57 @@
+name: PR Review Reminder
+
+on:
+  schedule:
+    # 테스트를 위해 매 시간 실행 (실제 사용 시 조정 필요)
+    - cron: "0 * * * *"
+  # 수동 실행 옵션 추가 (테스트용)
+  workflow_dispatch:
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Get pending PRs
+        id: pending-prs
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const prs = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open'
+            });
+
+            let message = "📋 *리뷰 대기 중인 PR 목록*\n\n";
+            let hasPRs = false;
+
+            for (const pr of prs.data) {
+              if (pr.requested_reviewers && pr.requested_reviewers.length > 0) {
+                hasPRs = true;
+                const reviewers = pr.requested_reviewers
+                  .map(r => r.login ? r.login : (r.slug ? `팀: ${r.slug}` : '알 수 없는 리뷰어'))
+                  .join(', ');
+                message += `• <${pr.html_url}|#${pr.number}: ${pr.title}> - 리뷰어: ${reviewers}\n`;
+              }
+            }
+
+            if (!hasPRs) {
+              message += "현재 리뷰 대기 중인 PR이 없습니다.🙌";
+            }
+
+            core.setOutput('message', message);
+            core.setOutput('has_prs', hasPRs.toString());
+
+            // 디버깅을 위해 콘솔에 출력
+            console.log(message);
+
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          channel-id: "C08JG1LKT44" # 슬랙 채널 ID
+          slack-message: ${{ steps.pending-prs.outputs.message }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}

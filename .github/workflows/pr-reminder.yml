@@ -19,7 +19,7 @@ jobs:
         uses: actions/github-script@v6
         with:
           script: |
-
+            const fs = require('fs');
             // 사용자 매핑 파일 로드 (파일이 없으면 빈 객체 사용)
              let userMapping = {};
              try {
@@ -101,14 +101,12 @@ jobs:
                  const daysOld = Math.floor((today - createdDate) / (1000 * 60 * 60 * 24));
                  let urgencyEmoji = '';
                  
-                 if (daysOld >= 5) {
-                   urgencyEmoji = '🔴'; // 5일 이상 지난 PR
-                 } else if (daysOld >= 3) {
-                   urgencyEmoji = '🟠'; // 3-4일 지난 PR
+                if (daysOld >= 3) {
+                   urgencyEmoji = '🍂'; // 3-4일 지난 PR
                  } else if (daysOld >= 1) {
-                   urgencyEmoji = '🟡'; // 1-2일 지난 PR
+                   urgencyEmoji = '🍃'; // 1-2일 지난 PR
                  } else {
-                   urgencyEmoji = '🟢'; // 오늘 생성된 PR
+                   urgencyEmoji = '🌱'; // 오늘 생성된 PR
                  }
                  
                  // 담당자 정보 추가
@@ -119,13 +117,13 @@ jobs:
                  message += `${urgencyEmoji} <${pr.html_url}|#${pr.number}: ${pr.title}>${jiraInfo}\n`;
                  message += `   • 리뷰어: ${reviewers}\n`;
                  message += `   • 담당자: ${assignees}\n`;
-                 message += `   • 생성일: ${createdDate.toLocaleDateString()} (${daysOld}일 전)\n\n`;
+                 message += `   • 요청일: ${createdDate.toLocaleDateString()} (${daysOld}일 전)\n\n`;
                }
              }
              
 
              if (!hasPRs) {
-               message = "현재 리뷰 대기 중인 PR이 없습니다.🙌";
+               message = "📋 *현재 리뷰 대기 중인 PR이 없습니다.*🙌 🎉";
              }
 
              core.setOutput('message', message);

@@ -23,8 +23,8 @@ jobs:
             // 사용자 매핑 파일 로드 (파일이 없으면 빈 객체 사용)
              let userMapping = {};
              try {
-               if (fs.existsSync('.github/user-mapping.json')) {
-                 const mappingData = fs.readFileSync('.github/user-mapping.json', 'utf8');
+               if (fs.existsSync('.github/workflows/user-mapping.json')) {
+                 const mappingData = fs.readFileSync('.github/workflows/user-mapping.json', 'utf8');
                  userMapping = JSON.parse(mappingData).github_to_slack || {};
                }
              } catch (error) {

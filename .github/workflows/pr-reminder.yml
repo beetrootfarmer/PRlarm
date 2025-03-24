@@ -3,7 +3,7 @@ name: PR Review Reminder
 on:
   schedule:
     # 테스트를 위해 매 시간 실행 (실제 사용 시 조정 필요)
-    - cron: "0 * * * *"
+    - cron: "0 5 * * 1-5"
   # 수동 실행 옵션 추가 (테스트용)
   workflow_dispatch:
 

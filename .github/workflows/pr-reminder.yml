@@ -1,186 +1,183 @@
-name: PR Review Reminder
+# name: PR Review Reminder
 
-on:
-  schedule:
-    # 테스트를 위해 매 시간 실행 (실제 사용 시 조정 필요)
-    - cron: "0 5 * * 1-5"
-  # 수동 실행 옵션 추가 (테스트용)
-  workflow_dispatch:
+# on:
+#   schedule:
+#     # 테스트를 위해 매 시간 실행 (실제 사용 시 조정 필요)
+#     - cron: "0 5 * * 1-5"
+#   # 수동 실행 옵션 추가 (테스트용)
+#   workflow_dispatch:
 
-jobs:
-  remind:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+# jobs:
+#   remind:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v3
 
-      - name: Get pending PRs
-        id: pending-prs
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const fs = require('fs');
-            // 사용자 매핑 파일 로드 (파일이 없으면 빈 객체 사용)
-             let userMapping = {};
-             try {
-               if (fs.existsSync('.github/workflows/user-mapping.json')) {
-                 const mappingData = fs.readFileSync('.github/workflows/user-mapping.json', 'utf8');
-                 userMapping = JSON.parse(mappingData).github_to_slack || {};
-               }
-             } catch (error) {
-               console.log('사용자 매핑 파일을 로드하는 중 오류 발생:', error);
-             }
-             
-             // GitHub 사용자명을 Slack ID로 변환하는 함수
-             function getSlackId(githubUsername) {
-               return userMapping[githubUsername] ? `<@${userMapping[githubUsername]}>` : githubUsername;
-             }
-             
-             // 지라 티켓 ID 추출 함수
-            function extractJiraTicket(pr) {
-               // "Related issue" 섹션 찾기 시도
-               const relatedIssueRegex = /(?:related|linked|connected)\s+(?:issue|issues|ticket|tickets)[^\n]*\n([\s\S]*?)(?:\n\s*\n|\n*$)/i;
-               const relatedSection = pr.body.match(relatedIssueRegex);
-               
-               let searchText = relatedSection && relatedSection[1] ? relatedSection[1] : pr.body;
-               
-               // genesisnest.atlassian.net 도메인을 포함한 링크 찾기
-               const jiraLinkRegex = /https?:\/\/genesisnest\.atlassian\.net\/browse\/([A-Z]+-\d+)/g;
-               const allMatches = [...searchText.matchAll(jiraLinkRegex)];
-               
-               if (allMatches.length > 0) {
-                 // 첫 번째 매치의 티켓 ID 반환
-                 return allMatches[0][1];
-               }
-               
-               // 백업: 본문 전체에서 Jira 티켓 ID 패턴 찾기
-               const jiraTicketRegex = /([A-Z]+-\d+)/g;
-               const matches = pr.body.match(jiraTicketRegex);
-               
-               return matches[0];
-             }
+#       - name: Get pending PRs
+#         id: pending-prs
+#         uses: actions/github-script@v6
+#         with:
+#           script: |
+#             const fs = require('fs');
+#             // 사용자 매핑 파일 로드 (파일이 없으면 빈 객체 사용)
+#              let userMapping = {};
+#              try {
+#                if (fs.existsSync('.github/workflows/user-mapping.json')) {
+#                  const mappingData = fs.readFileSync('.github/workflows/user-mapping.json', 'utf8');
+#                  userMapping = JSON.parse(mappingData).github_to_slack || {};
+#                }
+#              } catch (error) {
+#                console.log('사용자 매핑 파일을 로드하는 중 오류 발생:', error);
+#              }
 
-             const prs = await github.rest.pulls.list({
-               owner: context.repo.owner,
-               repo: context.repo.repo,
-               state: 'open'
-             });
+#              // GitHub 사용자명을 Slack ID로 변환하는 함수
+#              function getSlackId(githubUsername) {
+#                return userMapping[githubUsername] ? `<@${userMapping[githubUsername]}>` : githubUsername;
+#              }
 
-             let message = "📋 *리뷰 대기 중인 PR 목록*\n\n";
-             let hasPRs = false;
+#              // 지라 티켓 ID 추출 함수
+#             function extractJiraTicket(pr) {
+#                // "Related issue" 섹션 찾기 시도
+#                const relatedIssueRegex = /(?:related|linked|connected)\s+(?:issue|issues|ticket|tickets)[^\n]*\n([\s\S]*?)(?:\n\s*\n|\n*$)/i;
+#                const relatedSection = pr.body.match(relatedIssueRegex);
 
-              for (const pr of prs.data) {
-               // 리뷰 상태 확인 (승인된 PR은 제외)
-               const reviews = await github.rest.pulls.listReviews({
-                 owner: context.repo.owner,
-                 repo: context.repo.repo,
-                 pull_number: pr.number
-               });
-               
-               
+#                let searchText = relatedSection && relatedSection[1] ? relatedSection[1] : pr.body;
 
-            // 리뷰어별 최신 리뷰 상태 확인
-            const reviewerStatus = {};
-            reviews.data.forEach(review => {
-              // 각 리뷰어의 가장 최신 리뷰 상태만 저장
-              if (!reviewerStatus[review.user.login] || 
-                  new Date(reviewerStatus[review.user.login].submitted_at) < new Date(review.submitted_at)) {
-                reviewerStatus[review.user.login] = review;
-              }
-            });
+#                // genesisnest.atlassian.net 도메인을 포함한 링크 찾기
+#                const jiraLinkRegex = /https?:\/\/genesisnest\.atlassian\.net\/browse\/([A-Z]+-\d+)/g;
+#                const allMatches = [...searchText.matchAll(jiraLinkRegex)];
 
-            // 현재 요청된 리뷰어 목록
-            const currentRequestedReviewers = pr.requested_reviewers.map(r => r.login);
+#                if (allMatches.length > 0) {
+#                  // 첫 번째 매치의 티켓 ID 반환
+#                  return allMatches[0][1];
+#                }
 
-            // 승인 여부 확인 (모든 현재 요청된 리뷰어가 아직 승인하지 않았거나, 승인 후 새 커밋이 있는 경우)
-            let needsReview = false;
+#                // 백업: 본문 전체에서 Jira 티켓 ID 패턴 찾기
+#                const jiraTicketRegex = /([A-Z]+-\d+)/g;
+#                const matches = pr.body.match(jiraTicketRegex);
 
-            // 현재 요청된 각 리뷰어에 대해 확인
-            for (const reviewer of currentRequestedReviewers) {
-              // 리뷰어가 아직 리뷰하지 않았거나, 최신 리뷰가 승인이 아닌 경우
-              if (!reviewerStatus[reviewer] || reviewerStatus[reviewer].state !== 'APPROVED') {
-                needsReview = true;
-                break;
-              }
-              
-              // 승인했지만 그 이후에 새 커밋이 추가된 경우
-              const approvalDate = new Date(reviewerStatus[reviewer].submitted_at);
-              const lastCommitDate = new Date(pr.head.sha.committed_date || pr.updated_at);
-              
-              if (approvalDate < lastCommitDate) {
-                needsReview = true;
-                break;
-              }
-            }
+#                return matches[0];
+#              }
 
-            // 리뷰가 필요한 PR만 포함
-            if (!needsReview) continue;
+#              const prs = await github.rest.pulls.list({
+#                owner: context.repo.owner,
+#                repo: context.repo.repo,
+#                state: 'open'
+#              });
 
-               if (pr.requested_reviewers && pr.requested_reviewers.length > 0) {
-                 hasPRs = true;
-                 
-                 // 리뷰어 정보 가져오기 (Slack ID로 변환)
-                 const reviewers = pr.requested_reviewers
-                   .map(r => {
-                     if (r.login) {
-                       return getSlackId(r.login);
-                     } else if (r.slug) {
-                       return `팀: ${r.slug}`;
-                     } else {
-                       return '알 수 없는 리뷰어';
-                     }
-                   })
-                   .join(', ');
-                 
-                 // 지라 티켓 정보 추출
-                  const jiraTicket = extractJiraTicket(pr);
-                 let jiraInfo = '';
-                 if (jiraTicket) {
-                   jiraInfo = ` | 지라: <https://genesisnest.atlassian.net/browse/${jiraTicket}|${jiraTicket}>`;
-                 }
-                 
-                 // PR 생성일로부터 경과일 계산
-                 const createdDate = new Date(pr.created_at);
-                 const today = new Date();
-                 const daysOld = Math.floor((today - createdDate) / (1000 * 60 * 60 * 24));
-                 let urgencyEmoji = '';
-                 
-                if (daysOld >= 3) {
-                   urgencyEmoji = '🍂'; // 3일 이상 지난 PR
-                 } else if (daysOld >= 1) {
-                   urgencyEmoji = '🍃'; // 1-2일 지난 PR
-                 } else {
-                   urgencyEmoji = '🌱'; // 오늘 생성된 PR
-                 }
-                 
-                 // 담당자 정보 추가
-                 const assignees = pr.assignees && pr.assignees.length > 0 
-                   ? pr.assignees.map(a => getSlackId(a.login)).join(', ')
-                   : '없음';
-                 
-                 message += `${urgencyEmoji} <${pr.html_url}|#${pr.number}: ${pr.title}>${jiraInfo}\n`;
-                 message += `   • 리뷰어: ${reviewers}\n`;
-                 message += `   • 담당자: ${assignees}\n`;
-                 
-                 message += `   • 요청일: ${createdDate.toLocaleDateString('ko-KR')} (${daysOld === 0 ? '오늘' : `${daysOld}일 전`)}\n\n`;
-               }
-             }
-             
+#              let message = "📋 *리뷰 대기 중인 PR 목록*\n\n";
+#              let hasPRs = false;
 
-             if (!hasPRs) {
-               message = "🙌*현재 리뷰 대기 중인 PR이 없습니다.* 🎉";
-             }
+#               for (const pr of prs.data) {
+#                // 리뷰 상태 확인 (승인된 PR은 제외)
+#                const reviews = await github.rest.pulls.listReviews({
+#                  owner: context.repo.owner,
+#                  repo: context.repo.repo,
+#                  pull_number: pr.number
+#                });
 
-             core.setOutput('message', message);
-             core.setOutput('has_prs', hasPRs.toString());
+#             // 리뷰어별 최신 리뷰 상태 확인
+#             const reviewerStatus = {};
+#             reviews.data.forEach(review => {
+#               // 각 리뷰어의 가장 최신 리뷰 상태만 저장
+#               if (!reviewerStatus[review.user.login] ||
+#                   new Date(reviewerStatus[review.user.login].submitted_at) < new Date(review.submitted_at)) {
+#                 reviewerStatus[review.user.login] = review;
+#               }
+#             });
 
-             // 디버깅을 위해 콘솔에 출력
-             console.log(message);
+#             // 현재 요청된 리뷰어 목록
+#             const currentRequestedReviewers = pr.requested_reviewers.map(r => r.login);
 
-      - name: Send Slack notification
-        uses: slackapi/slack-github-action@v1.24.0
-        with:
-          channel-id: "C08JG1LKT44" # 슬랙 채널 ID
-          slack-message: ${{ steps.pending-prs.outputs.message }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+#             // 승인 여부 확인 (모든 현재 요청된 리뷰어가 아직 승인하지 않았거나, 승인 후 새 커밋이 있는 경우)
+#             let needsReview = false;
+
+#             // 현재 요청된 각 리뷰어에 대해 확인
+#             for (const reviewer of currentRequestedReviewers) {
+#               // 리뷰어가 아직 리뷰하지 않았거나, 최신 리뷰가 승인이 아닌 경우
+#               if (!reviewerStatus[reviewer] || reviewerStatus[reviewer].state !== 'APPROVED') {
+#                 needsReview = true;
+#                 break;
+#               }
+
+#               // 승인했지만 그 이후에 새 커밋이 추가된 경우
+#               const approvalDate = new Date(reviewerStatus[reviewer].submitted_at);
+#               const lastCommitDate = new Date(pr.head.sha.committed_date || pr.updated_at);
+
+#               if (approvalDate < lastCommitDate) {
+#                 needsReview = true;
+#                 break;
+#               }
+#             }
+
+#             // 리뷰가 필요한 PR만 포함
+#             if (!needsReview) continue;
+
+#                if (pr.requested_reviewers && pr.requested_reviewers.length > 0) {
+#                  hasPRs = true;
+
+#                  // 리뷰어 정보 가져오기 (Slack ID로 변환)
+#                  const reviewers = pr.requested_reviewers
+#                    .map(r => {
+#                      if (r.login) {
+#                        return getSlackId(r.login);
+#                      } else if (r.slug) {
+#                        return `팀: ${r.slug}`;
+#                      } else {
+#                        return '알 수 없는 리뷰어';
+#                      }
+#                    })
+#                    .join(', ');
+
+#                  // 지라 티켓 정보 추출
+#                   const jiraTicket = extractJiraTicket(pr);
+#                  let jiraInfo = '';
+#                  if (jiraTicket) {
+#                    jiraInfo = ` | 지라: <https://genesisnest.atlassian.net/browse/${jiraTicket}|${jiraTicket}>`;
+#                  }
+
+#                  // PR 생성일로부터 경과일 계산
+#                  const createdDate = new Date(pr.created_at);
+#                  const today = new Date();
+#                  const daysOld = Math.floor((today - createdDate) / (1000 * 60 * 60 * 24));
+#                  let urgencyEmoji = '';
+
+#                 if (daysOld >= 3) {
+#                    urgencyEmoji = '🍂'; // 3일 이상 지난 PR
+#                  } else if (daysOld >= 1) {
+#                    urgencyEmoji = '🍃'; // 1-2일 지난 PR
+#                  } else {
+#                    urgencyEmoji = '🌱'; // 오늘 생성된 PR
+#                  }
+
+#                  // 담당자 정보 추가
+#                  const assignees = pr.assignees && pr.assignees.length > 0
+#                    ? pr.assignees.map(a => getSlackId(a.login)).join(', ')
+#                    : '없음';
+
+#                  message += `${urgencyEmoji} <${pr.html_url}|#${pr.number}: ${pr.title}>${jiraInfo}\n`;
+#                  message += `   • 리뷰어: ${reviewers}\n`;
+#                  message += `   • 담당자: ${assignees}\n`;
+
+#                  message += `   • 요청일: ${createdDate.toLocaleDateString('ko-KR')} (${daysOld === 0 ? '오늘' : `${daysOld}일 전`)}\n\n`;
+#                }
+#              }
+
+#              if (!hasPRs) {
+#                message = "🙌*현재 리뷰 대기 중인 PR이 없습니다.* 🎉";
+#              }
+
+#              core.setOutput('message', message);
+#              core.setOutput('has_prs', hasPRs.toString());
+
+#              // 디버깅을 위해 콘솔에 출력
+#              console.log(message);
+
+#       - name: Send Slack notification
+#         uses: slackapi/slack-github-action@v1.24.0
+#         with:
+#           channel-id: "C08JG1LKT44" # 슬랙 채널 ID
+#           slack-message: ${{ steps.pending-prs.outputs.message }}
+#         env:
+#           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
